@@ -31,7 +31,6 @@ AZUL = HexColor("#55A9CB")
 FUNDO = HexColor("#F5F5F5")
 LARGURA_LOGO = 0.65 * cm
 LARGURA_ID2 = 0.65 * cm
-COLUNAS = ["Grupo", "Descrição", "ID", "ID2"]
 
 # ==========================================================
 # FUNÇÕES DE BASE
@@ -51,29 +50,6 @@ def preparar_logo():
     imagem.save(buffer, format="PNG")
     buffer.seek(0)
     return ImageReader(buffer)
-
-def ler_tabela_upload(uploaded_file):
-    if uploaded_file.name.endswith('.csv'):
-        df = pd.read_csv(uploaded_file, dtype=str, keep_default_na=False, sep=None, engine="python", encoding="utf-8-sig")
-    else:
-        df = pd.read_excel(uploaded_file, dtype=str, keep_default_na=False)
-
-    df.columns = df.columns.str.strip()
-    faltantes = [col for col in COLUNAS if col not in df.columns]
-    
-    if faltantes:
-        st.error(f"Colunas ausentes na tabela: {faltantes}")
-        st.stop()
-
-    df = df[df[COLUNAS].apply(lambda linha: any(str(v).strip() for v in linha), axis=1)].copy()
-    df["Descrição"] = df["Descrição"].str.strip()
-    df["ID2"] = df["ID2"].str.strip()
-    df = df[(df["Descrição"] != "") & (df["ID2"] != "")]
-
-    if df.empty:
-        st.error("A tabela não contém placas válidas.")
-        st.stop()
-    return df
 
 def desenhar_placa(pdf, x, y, descricao, id2, logo):
     w, h = PLACA_LARGURA, PLACA_ALTURA
@@ -145,26 +121,51 @@ def gerar_pdf_buffer(df):
 
     pdf.save()
     buffer.seek(0)
-    return buffer, len(df)
+    return buffer
 
 # ==========================================================
 # INTERFACE WEB (STREAMLIT)
 # ==========================================================
-st.set_page_config(page_title="Gerador de Plaquinhas Vports", page_icon="🏷️")
+st.set_page_config(page_title="Gerador de Plaquinhas Vports", page_icon="🏷️", layout="centered")
+
 st.title("Gerador de Plaquinhas 🏷️")
-st.write("Faça o upload da sua planilha Excel ou CSV para gerar o arquivo PDF pronto para impressão.")
+st.write("Preencha a tabela abaixo com os dados das plaquinhas. Para adicionar novas linhas, basta preencher a última linha vazia ou clicar no símbolo de **+**.")
 
-arquivo_upload = st.file_uploader("Arraste ou selecione a planilha (Excel/CSV)", type=["xlsx", "csv"])
+# Inicia um DataFrame vazio com as colunas corretas (uma linha em branco para facilitar)
+if "df_inicial" not in st.session_state:
+    st.session_state.df_inicial = pd.DataFrame([{"Grupo": "", "Descrição": "", "ID": "", "ID2": ""}])
 
-if arquivo_upload is not None:
-    st.success("Arquivo carregado! Processando a tabela...")
-    df_tabela = ler_tabela_upload(arquivo_upload)
-    
-    st.write(f"**Identificações encontradas:** {len(df_tabela)}")
-    
-    if st.button("Gerar PDF"):
+# Cria o editor de dados na tela (o usuário pode editar, adicionar ou excluir linhas)
+df_editado = st.data_editor(
+    st.session_state.df_inicial,
+    num_rows="dynamic", # Permite ao usuário adicionar novas linhas dinamicamente
+    use_container_width=True,
+    hide_index=True,
+    column_config={
+        "Grupo": st.column_config.TextColumn("Grupo (Opcional)"),
+        "Descrição": st.column_config.TextColumn("Descrição *", required=True),
+        "ID": st.column_config.TextColumn("ID (Opcional)"),
+        "ID2": st.column_config.TextColumn("ID2 *", required=True),
+    }
+)
+
+# Filtra a tabela para garantir que não vamos tentar desenhar placas vazias
+df_valido = df_editado.copy()
+df_valido["Descrição"] = df_valido["Descrição"].astype(str).str.strip()
+df_valido["ID2"] = df_valido["ID2"].astype(str).str.strip()
+
+# Remove linhas onde Descrição ou ID2 estejam em branco (ou nan)
+df_valido = df_valido[
+    (df_valido["Descrição"] != "") & (df_valido["Descrição"] != "nan") &
+    (df_valido["ID2"] != "") & (df_valido["ID2"] != "nan")
+]
+
+st.write(f"**Plaquinhas válidas prontas para geração:** {len(df_valido)}")
+
+if len(df_valido) > 0:
+    if st.button("Gerar PDF", type="primary"):
         with st.spinner("Desenhando as plaquinhas..."):
-            pdf_buffer, qtd = gerar_pdf_buffer(df_tabela)
+            pdf_buffer = gerar_pdf_buffer(df_valido)
             
             st.success("PDF gerado com sucesso!")
             st.download_button(
@@ -173,3 +174,5 @@ if arquivo_upload is not None:
                 file_name="plaquinhas.pdf",
                 mime="application/pdf"
             )
+elif st.button("Gerar PDF", disabled=True):
+    pass
