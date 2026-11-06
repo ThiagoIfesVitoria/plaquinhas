@@ -3,6 +3,7 @@ import pandas as pd
 from PIL import Image
 from io import BytesIO
 from pathlib import Path
+import base64
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.colors import HexColor
@@ -33,7 +34,7 @@ LARGURA_LOGO = 0.65 * cm
 LARGURA_ID2 = 0.65 * cm
 
 # ==========================================================
-# FUNÇÕES DE BASE
+# FUNÇÕES DE BASE E PDF
 # ==========================================================
 def registrar_fontes():
     if not FONTE_BOLD.exists():
@@ -50,6 +51,13 @@ def preparar_logo():
     imagem.save(buffer, format="PNG")
     buffer.seek(0)
     return ImageReader(buffer)
+
+def get_logo_base64():
+    """Lê a imagem original para mostrar no preview web"""
+    if ARQUIVO_LOGO.exists():
+        with open(ARQUIVO_LOGO, "rb") as img_file:
+            return base64.b64encode(img_file.read()).decode()
+    return ""
 
 def desenhar_placa(pdf, x, y, descricao, id2, logo):
     w, h = PLACA_LARGURA, PLACA_ALTURA
@@ -113,8 +121,8 @@ def gerar_pdf_buffer(df):
         x = MARGEM_X + coluna * (PLACA_LARGURA + ESPACO_X)
         y_base = pagina_altura - MARGEM_Y - ALTURA_PAR - linha_par * (ALTURA_PAR + ESPACO_Y)
 
-        descricao = str(registro["Descrição"]).strip()
-        id2 = str(registro["ID2"]).strip()
+        descricao = str(registro["Texto Central"]).strip()
+        id2 = str(registro["Código Lateral"]).strip()
 
         desenhar_placa(pdf, x, y_base + PLACA_ALTURA, descricao, id2, logo)
         desenhar_placa(pdf, x, y_base, descricao, id2, logo)
@@ -126,53 +134,105 @@ def gerar_pdf_buffer(df):
 # ==========================================================
 # INTERFACE WEB (STREAMLIT)
 # ==========================================================
-st.set_page_config(page_title="Gerador de Plaquinhas Vports", page_icon="🏷️", layout="centered")
+st.set_page_config(page_title="Gerador de Plaquinhas", page_icon="🏷️", layout="wide")
 
 st.title("Gerador de Plaquinhas 🏷️")
-st.write("Preencha a tabela abaixo com os dados das plaquinhas. Para adicionar novas linhas, basta preencher a última linha vazia ou clicar no símbolo de **+**.")
+st.write("Preencha a tabela. A ferramenta é universal: digite o texto central e o código lateral exatamente como quer que apareçam.")
 
-# Inicia um DataFrame vazio com as colunas corretas (uma linha em branco para facilitar)
-if "df_inicial" not in st.session_state:
-    st.session_state.df_inicial = pd.DataFrame([{"Grupo": "", "Descrição": "", "ID": "", "ID2": ""}])
+# Divide a tela: Tabela na esquerda (70%) e Preview na direita (30%)
+col_tabela, col_preview = st.columns([2.5, 1.5])
 
-# Cria o editor de dados na tela (o usuário pode editar, adicionar ou excluir linhas)
-df_editado = st.data_editor(
-    st.session_state.df_inicial,
-    num_rows="dynamic", # Permite ao usuário adicionar novas linhas dinamicamente
-    use_container_width=True,
-    hide_index=True,
-    column_config={
-        "Grupo": st.column_config.TextColumn("Grupo (Opcional)"),
-        "Descrição": st.column_config.TextColumn("Descrição *", required=True),
-        "ID": st.column_config.TextColumn("ID (Opcional)"),
-        "ID2": st.column_config.TextColumn("ID2 *", required=True),
-    }
-)
+with col_tabela:
+    st.subheader("1. Preencha os Dados")
+    if "df_inicial" not in st.session_state:
+        st.session_state.df_inicial = pd.DataFrame([{"Texto Central": "GERADOR 01", "Código Lateral": "GGERA-01"}])
 
-# Filtra a tabela para garantir que não vamos tentar desenhar placas vazias
-df_valido = df_editado.copy()
-df_valido["Descrição"] = df_valido["Descrição"].astype(str).str.strip()
-df_valido["ID2"] = df_valido["ID2"].astype(str).str.strip()
+    df_editado = st.data_editor(
+        st.session_state.df_inicial,
+        num_rows="dynamic",
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Texto Central": st.column_config.TextColumn("Texto Central (Ex: NOME DA SALA) *", required=True),
+            "Código Lateral": st.column_config.TextColumn("Código Lateral (Ex: ID-001) *", required=True),
+        }
+    )
 
-# Remove linhas onde Descrição ou ID2 estejam em branco (ou nan)
-df_valido = df_valido[
-    (df_valido["Descrição"] != "") & (df_valido["Descrição"] != "nan") &
-    (df_valido["ID2"] != "") & (df_valido["ID2"] != "nan")
-]
+    # Limpeza e validação dos dados
+    df_valido = df_editado.copy()
+    df_valido["Texto Central"] = df_valido["Texto Central"].astype(str).str.strip()
+    df_valido["Código Lateral"] = df_valido["Código Lateral"].astype(str).str.strip()
+    df_valido = df_valido[
+        (df_valido["Texto Central"] != "") & (df_valido["Texto Central"] != "nan") &
+        (df_valido["Código Lateral"] != "") & (df_valido["Código Lateral"] != "nan")
+    ]
 
-st.write(f"**Plaquinhas válidas prontas para geração:** {len(df_valido)}")
+with col_preview:
+    st.subheader("2. Pré-visualização")
+    
+    # Pega os dados da primeira linha válida para mostrar no preview
+    texto_preview = "TEXTO AQUI"
+    codigo_preview = "CÓDIGO"
+    
+    if len(df_valido) > 0:
+        texto_preview = df_valido.iloc[0]["Texto Central"].upper()
+        codigo_preview = df_valido.iloc[0]["Código Lateral"].upper()
+        st.caption("Visualizando a primeira linha da tabela:")
+    else:
+        st.caption("Preencha a tabela para ver a pré-visualização.")
 
-if len(df_valido) > 0:
-    if st.button("Gerar PDF", type="primary"):
-        with st.spinner("Desenhando as plaquinhas..."):
-            pdf_buffer = gerar_pdf_buffer(df_valido)
-            
-            st.success("PDF gerado com sucesso!")
-            st.download_button(
-                label="📥 Baixar Arquivo PDF",
-                data=pdf_buffer,
-                file_name="plaquinhas.pdf",
-                mime="application/pdf"
-            )
-elif st.button("Gerar PDF", disabled=True):
-    pass
+    # HTML/CSS para simular a plaquinha exatamente na mesma proporção do PDF
+    logo_b64 = get_logo_base64()
+    img_tag = f'<img src="data:image/png;base64,{logo_b64}" style="width: 140px; transform: rotate(-90deg);">' if logo_b64 else 'LOGO'
+    
+    html_preview = f"""
+    <div style="
+        width: 100%; 
+        aspect-ratio: 4.3 / 2.2; 
+        background: #F5F5F5; 
+        border-radius: 4px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        display: flex; 
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        overflow: hidden;
+        border: 1px solid #ccc;
+        margin-bottom: 20px;
+    ">
+        <!-- Lado Esquerdo (Logo) -->
+        <div style="width: 15%; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+            {img_tag}
+        </div>
+        
+        <!-- Centro (Texto Principal) -->
+        <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center; text-align: center; padding: 10px;">
+            <span style="font-weight: 800; font-size: 1.5vw; color: #000; line-height: 1.2; word-break: break-word;">
+                {texto_preview.replace(chr(10), '<br>')}
+            </span>
+        </div>
+        
+        <!-- Faixa Azul Direita (Código) -->
+        <div style="width: 15%; background: #55A9CB; display: flex; align-items: center; justify-content: center;">
+            <div style="transform: rotate(90deg); white-space: nowrap; font-weight: 800; font-size: 1.2vw; color: #000;">
+                {codigo_preview}
+            </div>
+        </div>
+    </div>
+    """
+    st.markdown(html_preview, unsafe_allow_html=True)
+
+    # Botão de Geração e Download (abaixo do preview)
+    st.write(f"**Total de plaquinhas:** {len(df_valido)}")
+    if len(df_valido) > 0:
+        if st.button("Gerar PDF Final", type="primary", use_container_width=True):
+            with st.spinner("Construindo arquivo de impressão..."):
+                pdf_buffer = gerar_pdf_buffer(df_valido)
+                st.success("PDF Pronto!")
+                st.download_button(
+                    label="📥 Baixar Arquivo PDF",
+                    data=pdf_buffer,
+                    file_name="plaquinhas.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+    else:
+        st.button("Gerar PDF Final", disabled=True, use_container_width=True)
