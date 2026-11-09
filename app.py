@@ -184,43 +184,45 @@ with col_preview:
 
     # HTML/CSS para simular a plaquinha (sem indentação extra para evitar bugs)
     logo_b64 = get_logo_base64()
-    img_tag = f'<img src="data:image/png;base64,{logo_b64}" style="width: 140px; transform: rotate(-90deg);">' if logo_b64 else 'LOGO'
+    img_tag = f'<img src="data:image/png;base64,{logo_b64}" style="width: 160px; transform: rotate(-90deg);">' if logo_b64 else 'LOGO'
     
+    # HTML com dimensões fixas (430px x 220px = proporção exata de 4.3 x 2.2)
     html_preview = f"""
-<div style="
-    width: 100%; 
-    aspect-ratio: 4.3 / 2.2; 
-    background: #F5F5F5; 
-    border-radius: 4px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    display: flex; 
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    overflow: hidden;
-    border: 1px solid #ccc;
-    margin-bottom: 20px;
-">
-    <!-- Lado Esquerdo (Logo) -->
-    <div style="width: 15%; display: flex; align-items: center; justify-content: center; overflow: hidden;">
-        {img_tag}
-    </div>
-    
-    <!-- Centro (Texto Principal) -->
-    <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center; text-align: center; padding: 10px;">
-        <span style="font-weight: 800; font-size: 1.5vw; color: #000; line-height: 1.2; word-break: break-word;">
-            {texto_preview.replace(chr(10), '<br>')}
-        </span>
-    </div>
-    
-    <!-- Faixa Azul Direita (Código) -->
-    <div style="width: 15%; background: #55A9CB; display: flex; align-items: center; justify-content: center;">
-        <div style="transform: rotate(90deg); white-space: nowrap; font-weight: 800; font-size: 1.2vw; color: #000;">
-            {codigo_preview}
+<div style="display: flex; justify-content: center; width: 100%;">
+    <div style="
+        width: 430px; 
+        height: 220px; 
+        background: #F5F5F5; 
+        border-radius: 4px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        display: flex; 
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        overflow: hidden;
+        border: 1px solid #ccc;
+    ">
+        <!-- Lado Esquerdo (Logo) -->
+        <div style="width: 65px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+            {img_tag}
+        </div>
+        
+        <!-- Centro (Texto Principal) -->
+        <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center; text-align: center; padding: 10px;">
+            <span style="font-weight: 800; font-size: 20px; color: #000; line-height: 1.2; word-break: break-word;">
+                {texto_preview.replace(chr(10), '<br>')}
+            </span>
+        </div>
+        
+        <!-- Faixa Azul Direita (Código) -->
+        <div style="width: 65px; background: #55A9CB; display: flex; align-items: center; justify-content: center;">
+            <div style="transform: rotate(90deg); white-space: nowrap; font-weight: 800; font-size: 14px; color: #000;">
+                {codigo_preview}
+            </div>
         </div>
     </div>
 </div>
 """
     
-    # Usa components.html em vez de st.markdown (muito mais estável para CSS/HTML)
+    # Mantém o components chamando a variável html_preview
     components.html(html_preview, height=250)
 
     # Botão de Geração e Download (abaixo do preview)
