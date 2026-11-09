@@ -239,20 +239,3 @@ with col_preview:
                 )
     else:
         st.button("Gerar PDF Final", disabled=True, use_container_width=True)
-
-    # Botão de Geração e Download (abaixo do preview)
-    st.write(f"**Total de plaquinhas:** {len(df_valido)}")
-    if len(df_valido) > 0:
-        if st.button("Gerar PDF Final", type="primary", use_container_width=True):
-            with st.spinner("Construindo arquivo de impressão..."):
-                pdf_buffer = gerar_pdf_buffer(df_valido)
-                st.success("PDF Pronto!")
-                st.download_button(
-                    label="📥 Baixar Arquivo PDF",
-                    data=pdf_buffer,
-                    file_name="plaquinhas.pdf",
-                    mime="application/pdf",
-                    use_container_width=True
-                )
-    else:
-        st.button("Gerar PDF Final", disabled=True, use_container_width=True)
