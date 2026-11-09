@@ -11,6 +11,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.utils import ImageReader, simpleSplit
 from reportlab.lib.units import cm, mm
+import streamlit.components.v1 as components
 
 # ==========================================================
 # CONFIGURAÇÕES DE LAYOUT
@@ -181,44 +182,63 @@ with col_preview:
     else:
         st.caption("Preencha a tabela para ver a pré-visualização.")
 
-    # HTML/CSS para simular a plaquinha exatamente na mesma proporção do PDF
+    # HTML/CSS para simular a plaquinha (sem indentação extra para evitar bugs)
     logo_b64 = get_logo_base64()
     img_tag = f'<img src="data:image/png;base64,{logo_b64}" style="width: 140px; transform: rotate(-90deg);">' if logo_b64 else 'LOGO'
     
     html_preview = f"""
-    <div style="
-        width: 100%; 
-        aspect-ratio: 4.3 / 2.2; 
-        background: #F5F5F5; 
-        border-radius: 4px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        display: flex; 
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        overflow: hidden;
-        border: 1px solid #ccc;
-        margin-bottom: 20px;
-    ">
-        <!-- Lado Esquerdo (Logo) -->
-        <div style="width: 15%; display: flex; align-items: center; justify-content: center; overflow: hidden;">
-            {img_tag}
-        </div>
-        
-        <!-- Centro (Texto Principal) -->
-        <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center; text-align: center; padding: 10px;">
-            <span style="font-weight: 800; font-size: 1.5vw; color: #000; line-height: 1.2; word-break: break-word;">
-                {texto_preview.replace(chr(10), '<br>')}
-            </span>
-        </div>
-        
-        <!-- Faixa Azul Direita (Código) -->
-        <div style="width: 15%; background: #55A9CB; display: flex; align-items: center; justify-content: center;">
-            <div style="transform: rotate(90deg); white-space: nowrap; font-weight: 800; font-size: 1.2vw; color: #000;">
-                {codigo_preview}
-            </div>
+<div style="
+    width: 100%; 
+    aspect-ratio: 4.3 / 2.2; 
+    background: #F5F5F5; 
+    border-radius: 4px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    display: flex; 
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    overflow: hidden;
+    border: 1px solid #ccc;
+    margin-bottom: 20px;
+">
+    <!-- Lado Esquerdo (Logo) -->
+    <div style="width: 15%; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+        {img_tag}
+    </div>
+    
+    <!-- Centro (Texto Principal) -->
+    <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center; text-align: center; padding: 10px;">
+        <span style="font-weight: 800; font-size: 1.5vw; color: #000; line-height: 1.2; word-break: break-word;">
+            {texto_preview.replace(chr(10), '<br>')}
+        </span>
+    </div>
+    
+    <!-- Faixa Azul Direita (Código) -->
+    <div style="width: 15%; background: #55A9CB; display: flex; align-items: center; justify-content: center;">
+        <div style="transform: rotate(90deg); white-space: nowrap; font-weight: 800; font-size: 1.2vw; color: #000;">
+            {codigo_preview}
         </div>
     </div>
-    """
-    st.markdown(html_preview, unsafe_allow_html=True)
+</div>
+"""
+    
+    # Usa components.html em vez de st.markdown (muito mais estável para CSS/HTML)
+    components.html(html_preview, height=250)
+
+    # Botão de Geração e Download (abaixo do preview)
+    st.write(f"**Total de plaquinhas:** {len(df_valido)}")
+    if len(df_valido) > 0:
+        if st.button("Gerar PDF Final", type="primary", use_container_width=True):
+            with st.spinner("Construindo arquivo de impressão..."):
+                pdf_buffer = gerar_pdf_buffer(df_valido)
+                st.success("PDF Pronto!")
+                st.download_button(
+                    label="📥 Baixar Arquivo PDF",
+                    data=pdf_buffer,
+                    file_name="plaquinhas.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+    else:
+        st.button("Gerar PDF Final", disabled=True, use_container_width=True)
 
     # Botão de Geração e Download (abaixo do preview)
     st.write(f"**Total de plaquinhas:** {len(df_valido)}")
